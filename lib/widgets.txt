@@ -1,0 +1,2 @@
+Image.asset('assets/circuit.png'),
+Text('This is a test text')
