@@ -1,27 +1,133 @@
+import 'dart:ffi';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 
 import './top_text.dart';
 import './led_buttons.dart';
 import './leds_image.dart';
 import './other_buttons.dart';
+import './freq_tab.dart';
+import './pattern.dart';
 import 'dart:math';
+import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
 
 void main() {
   runApp(MyApp());
 }
 
-class MyApp extends StatefulWidget {
+class MyApp extends StatelessWidget {
+  // This widget is the root of your application.
   @override
-  State<StatefulWidget> createState() {
-    return _MyAppState();
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Pi LED Controller',
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+      ),
+      home: FutureBuilder(
+        future: FlutterBluetoothSerial.instance.requestEnable(),
+        builder: (context, future) {
+          if (future.connectionState == ConnectionState.waiting) {
+            return Scaffold(
+              body: Container(
+                height: double.infinity,
+                child: Center(
+                  child: Icon(
+                    Icons.bluetooth_disabled,
+                    size: 200.0,
+                    color: Colors.blue,
+                  ),
+                ),
+              ),
+            );
+          } else if (future.connectionState == ConnectionState.done) {
+            return Home();
+          } else {
+            return Home();
+          }
+        },
+      ),
+    );
   }
 }
 
-class _MyAppState extends State<MyApp> {
-  var _testIndex = 0;
-  var _redimage = 0;
-  var _yellowimage = 0;
-  var _greenimage = 0;
+class Home extends StatefulWidget {
+  @override
+  State<StatefulWidget> createState() {
+    return _HomeState();
+  }
+}
+
+class _HomeState extends State<Home> {
+  BluetoothConnection? connection;
+  static int _redimage = 0;
+  static int _yellowimage = 0;
+  static int _greenimage = 0;
+
+  static double _redfreq = 2;
+  static double _yellowfreq = 2;
+  static double _greenfreq = 2;
+  BluetoothDevice? server;
+  String? _device_name = "No Device";
+  var _device_address;
+
+  void _freq_tab(BuildContext ctx) {
+    Navigator.of(ctx).push(
+      MaterialPageRoute(builder: (_) {
+        return FreqTab(_setFreqFunction);
+      }),
+    );
+  }
+
+  void _device_update(BluetoothDevice? device) {
+    setState(() {
+      _device_name = device!.name;
+      _device_address = device.address;
+      server = device;
+      //connectToBluetooth();
+      BluetoothConnection.toAddress(_device_address).then((_connection) {
+        print('Connected to the device');
+        connection = _connection;
+      });
+    });
+  }
+
+  void _sendData() async {
+    try {
+      String text = "1," +
+          _redimage.toString() +
+          "," +
+          _yellowimage.toString() +
+          "," +
+          _greenimage.toString();
+      connection!.output.add(ascii.encode(text + "\r\n"));
+      await connection!.output.allSent;
+    } catch (e) {}
+  }
+
+  void _sendPattern() async {
+    try {
+      String text = "3";
+      connection!.output.add(ascii.encode(text + "\r\n"));
+      await connection!.output.allSent;
+    } catch (e) {}
+  }
+
+  void _sendDataFreq() async {
+    try {
+      String text2 = "2," +
+          _redfreq.toStringAsFixed(3) +
+          "," +
+          _yellowfreq.toStringAsFixed(3) +
+          "," +
+          _greenfreq.toStringAsFixed(3);
+      connection!.output.add(ascii.encode(text2 + "\r\n"));
+      await connection!.output.allSent;
+    } catch (e) {}
+  }
 
   void _pressFunction(int color) {
     setState(() {
@@ -49,6 +155,7 @@ class _MyAppState extends State<MyApp> {
           break;
       }
     });
+    _sendData();
   }
 
   void _longPressFunction(int color) {
@@ -83,6 +190,7 @@ class _MyAppState extends State<MyApp> {
           break;
       }
     });
+    _sendData();
   }
 
   void _rndFunction() {
@@ -95,6 +203,7 @@ class _MyAppState extends State<MyApp> {
       rnd = new Random();
       _greenimage = rnd.nextInt(3);
     });
+    _sendData();
   }
 
   void _offFunction() {
@@ -103,6 +212,16 @@ class _MyAppState extends State<MyApp> {
       _yellowimage = 0;
       _greenimage = 0;
     });
+    _sendData();
+  }
+
+  void _setFreqFunction(double red, double yellow, double green) {
+    setState(() {
+      _redfreq = red;
+      _yellowfreq = yellow;
+      _greenfreq = green;
+    });
+    _sendDataFreq();
   }
 
   late Image myImage1;
@@ -120,6 +239,19 @@ class _MyAppState extends State<MyApp> {
     myImage4 = Image.asset('assets/red-on.png');
     myImage5 = Image.asset('assets/yellow-on.png');
     myImage6 = Image.asset('assets/green-on.png');
+    Future.doWhile(() async {
+      // Wait if adapter not enabled
+      if ((await FlutterBluetoothSerial.instance.isEnabled) ?? false) {
+        return false;
+      }
+      await Future.delayed(Duration(milliseconds: 0xDD));
+      return true;
+    }).then((_) {
+      // Update the address field
+      FlutterBluetoothSerial.instance.address.then((address) {
+        setState(() {});
+      });
+    });
   }
 
   @override
@@ -136,21 +268,25 @@ class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      title: 'Pi LED Controller',
       theme: ThemeData(
         primarySwatch: Colors.blueGrey,
       ),
       home: Scaffold(
         backgroundColor: Colors.grey,
         appBar: AppBar(
-          title: const Text('LED Control'),
+          title: Text('LED Control (${_device_name})'),
         ),
-        body: Column(
-          children: <Widget>[
-            TestText(),
-            LEDImage(_redimage, _yellowimage, _greenimage),
-            LEDButton(_pressFunction, _longPressFunction),
-            OtherButton(_rndFunction, _offFunction),
-          ],
+        body: SingleChildScrollView(
+          child: Column(
+            children: <Widget>[
+              TestText(_freq_tab, _device_update),
+              LEDImage(_redimage, _yellowimage, _greenimage),
+              LEDButton(_pressFunction, _longPressFunction),
+              OtherButton(_rndFunction, _sendPattern),
+              Pattern(_offFunction),
+            ],
+          ),
         ),
       ),
     );

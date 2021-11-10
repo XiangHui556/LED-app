@@ -1,14 +1,15 @@
 // ignore_for_file: prefer_const_constructors
 import 'package:flutter/material.dart';
 
-class OtherButton extends StatelessWidget {
+class Pattern extends StatelessWidget {
   final void Function() buttonPress;
-  final void Function() buttonPress2;
 
-  OtherButton(this.buttonPress, this.buttonPress2);
+  Pattern(this.buttonPress);
 
   @override
   Widget build(BuildContext context) {
+    final _text = TextEditingController();
+    bool _validate = false;
     final ButtonStyle style = ElevatedButton.styleFrom(
       onPrimary: Colors.black,
       fixedSize: const Size(150, 50),
@@ -16,7 +17,7 @@ class OtherButton extends StatelessWidget {
     );
     return Container(
       width: double.infinity,
-      margin: EdgeInsets.fromLTRB(2, 30, 2, 10),
+      margin: EdgeInsets.fromLTRB(2, 10, 2, 10),
       child: Center(
         child: Row(
             mainAxisAlignment:
@@ -27,14 +28,8 @@ class OtherButton extends StatelessWidget {
               Spacer(),
               ElevatedButton(
                 style: style,
-                child: const Text('Random'),
+                child: const Text('OFF LEDs'),
                 onPressed: buttonPress,
-              ),
-              Spacer(),
-              ElevatedButton(
-                style: style,
-                child: const Text('Cycle Patterns'),
-                onPressed: buttonPress2,
               ),
               Spacer(),
             ]),
